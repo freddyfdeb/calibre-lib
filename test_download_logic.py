@@ -9,7 +9,7 @@ import unittest
 from unittest.mock import patch
 
 with patch.dict(sys.modules, {"calibre": types.SimpleNamespace(browser=None)}):
-    from scraper import LibgenScraper
+    from scraper import LibgenScraper, normalize_book_extension
 
 
 class Response(io.BytesIO):
@@ -78,6 +78,14 @@ class DownloadLogicTests(unittest.TestCase):
         with patch.object(self.scraper, "_open_url", return_value=response):
             with self.assertRaisesRegex(Exception, "Incomplete download"):
                 self.scraper.download_file("https://a", self.path)
+
+    def test_book_extension_is_normalized_and_rejects_path_components(self):
+        self.assertEqual(normalize_book_extension(" EPUB "), "epub")
+        self.assertEqual(normalize_book_extension(""), "epub")
+        for extension in ("../outside", r"..\outside", "epub/file", ".epub", "PDF " * 5):
+            with self.subTest(extension=extension):
+                with self.assertRaisesRegex(ValueError, "Invalid book file extension"):
+                    normalize_book_extension(extension)
 
     def test_transfer_starts_before_slow_probe_finishes(self):
         release = threading.Event()

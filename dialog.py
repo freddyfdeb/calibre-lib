@@ -140,7 +140,11 @@ try:
         remove_pending_search,
         clear_pending_searches,
     )
-    from calibre_plugins.libgen_store.scraper import LibgenScraper, LibgenBook
+    from calibre_plugins.libgen_store.scraper import (
+        LibgenScraper,
+        LibgenBook,
+        normalize_book_extension,
+    )
 except (ImportError, ModuleNotFoundError):
     from config import (
         prefs,
@@ -170,7 +174,7 @@ except (ImportError, ModuleNotFoundError):
         remove_pending_search,
         clear_pending_searches,
     )
-    from scraper import LibgenScraper, LibgenBook
+    from scraper import LibgenScraper, LibgenBook, normalize_book_extension
 
 try:
     from calibre_plugins.libgen_store.hardcover import (
@@ -768,16 +772,6 @@ class BulkDownloadWorker(QThread):
                     self.log_message.emit(f"[{ts}] [{c_num}/{total_pending}] Starting: \"{short_title}\"")
                     self.item_status.emit(idx, "Resolving mirror link...")
 
-                    ext = (book.extension or "epub").lower()
-                    safe_title = sanitize_filename(book.title or "Unknown")
-                    safe_author = sanitize_filename(book.author or "Unknown")
-                    base_dest_file = os.path.join(download_dir, f"{safe_title} - {safe_author}.{ext}")
-                    dest_file = base_dest_file
-                    suffix = 1
-                    while os.path.exists(dest_file):
-                        dest_file = os.path.join(download_dir, f"{safe_title} - {safe_author} ({suffix}).{ext}")
-                        suffix += 1
-
                     def on_log(msg):
                         t_now = time.strftime('%H:%M:%S')
                         self.log_message.emit(f"[{t_now}] {msg}")
@@ -788,7 +782,23 @@ class BulkDownloadWorker(QThread):
                     def on_link(url, stage):
                         self.link_trying.emit(idx, url, stage)
 
+                    dest_file = None
                     try:
+                        ext = normalize_book_extension(book.extension)
+                        safe_title = sanitize_filename(book.title or "Unknown")
+                        safe_author = sanitize_filename(book.author or "Unknown")
+                        base_dest_file = os.path.join(
+                            download_dir, f"{safe_title} - {safe_author}.{ext}"
+                        )
+                        dest_file = base_dest_file
+                        suffix = 1
+                        while os.path.exists(dest_file):
+                            dest_file = os.path.join(
+                                download_dir,
+                                f"{safe_title} - {safe_author} ({suffix}).{ext}",
+                            )
+                            suffix += 1
+
                         self.item_status.emit(idx, "Downloading...")
                         dest_path, cover_url = scraper.resolve_and_download(
                             book.detail_url,
@@ -812,7 +822,7 @@ class BulkDownloadWorker(QThread):
                     except Exception as e:
                         err_msg = str(e)
                         if "stopped by user" in err_msg.lower() or self._is_aborted:
-                            if os.path.exists(dest_file):
+                            if dest_file and os.path.exists(dest_file):
                                 try:
                                     os.remove(dest_file)
                                 except Exception:

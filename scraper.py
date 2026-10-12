@@ -34,6 +34,13 @@ _RE_WORD = re.compile(r'\w+')
 _RE_MIRROR = re.compile(r"^https?://(?:www\.)?libgen\.[a-z]{2,}(?::\d+)?/?$", re.IGNORECASE)
 
 
+def normalize_book_extension(extension):
+    extension = (extension or "epub").strip().lower()
+    if not re.fullmatch(r"[a-z0-9]{1,16}", extension):
+        raise ValueError("Invalid book file extension")
+    return extension
+
+
 def _clean_mirror_url(url):
     clean = (url or "").strip().rstrip("/")
     if not clean:
